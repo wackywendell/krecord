@@ -1,4 +1,22 @@
 [package]
 name = "kiss3d_recording"
 version = "0.1.0"
-authors = ["Wendell Smith <wackywendell@gmail.com>"]
+authors = [ "Sébastien Crozet <developer@crozet.re>", "Wendell Smith <wackywendell@gmail.com>"]
+
+[dependencies]
+libc = "*"
+
+[dependencies.kiss3d]
+git = "https://github.com/sebcrozet/kiss3d"
+
+[dependencies.avcodec55]
+git="https://github.com/mewlips/rust-ffmpeg.git"
+
+[dependencies.avutil52]
+git="https://github.com/mewlips/rust-ffmpeg.git"
+
+[dependencies.avformat55]
+git="https://github.com/mewlips/rust-ffmpeg.git"
+
+[dependencies.swscale2]
+git="https://github.com/mewlips/rust-ffmpeg.git"
