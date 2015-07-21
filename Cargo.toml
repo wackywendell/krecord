@@ -6,6 +6,9 @@ authors = [ "Sébastien Crozet <developer@crozet.re>", "Wendell Smith <wackywend
 [dependencies]
 libc = "*"
 
+[dev-dependencies]
+nalgebra = "*" # for example 'recording.rs'
+
 [dependencies.kiss3d]
 git = "https://github.com/sebcrozet/kiss3d"
 
