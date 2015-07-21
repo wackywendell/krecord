@@ -2,19 +2,17 @@
  * Video recorder for the `kiss3d` graphics engine.
  */
 
-#![crate_id = "kiss3d_recording#0.1"]
 #![crate_type = "lib"]
+#![feature(convert)]
 #![deny(non_camel_case_types)]
-#![deny(unnecessary_parens)]
-#![deny(non_uppercase_statics)]
-#![deny(unnecessary_qualification)]
-#![warn(missing_doc)] // FIXME: should be denied.
-#![deny(unused_result)]
-#![deny(unnecessary_typecast)]
-#![warn(visible_private_types)] // FIXME: should be denied.
-#![feature(globs)]
-#![feature(macro_rules)]
-#![feature(unsafe_destructor)]
+#![deny(unused_parens)]
+#![deny(non_upper_case_globals)]
+#![deny(unused_qualifications)]
+#![warn(missing_docs)] // FIXME: should be denied.
+#![deny(unused_results)]
+#![deny(unused_variables)]
+#![warn(trivial_casts)]
+
 #![doc(html_root_url = "http://kiss3d.org/doc")]
 
 extern crate libc;
@@ -33,7 +31,8 @@ use avformat::{AVFormatContext, AVStream};
 use avutil::{AVFrame, Struct_AVRational};
 use std::ptr;
 use std::mem;
-use std::path::Path;
+use std::path::PathBuf;
+use std::ffi::{CString,OsStr};
 use std::iter::FromIterator;
 use std::sync::{Once, ONCE_INIT};
 use kiss3d::window::Window;
@@ -61,7 +60,7 @@ pub struct Recorder {
     format_context:   *mut AVFormatContext,
     video_st:         *mut AVStream,
     scale_context:    *mut Struct_SwsContext,
-    path:             Path
+    path:             PathBuf
 }
 
 impl Recorder {
@@ -71,7 +70,7 @@ impl Recorder {
     /// * `path`   - path to the output file.
     /// * `width`  - width of the recorded video.
     /// * `height` - height of the recorded video.
-    pub fn new(path: Path, width: usize, height: usize) -> Recorder {
+    pub fn new<P: ?Sized + AsRef<OsStr>>(path: &P, width: usize, height: usize) -> Recorder {
         Recorder::new_with_params(path, width, height, None, None, None, None, None)
     }
 
@@ -87,15 +86,15 @@ impl Recorder {
     /// * `gop_size`     - the number of pictures in a group of pictures. Default value: 10.
     /// * `max_b_frames` - maximum number of B-frames between non-B-frames. Default value: 1.
     /// * `pix_fmt`      - pixel format. Default value: `avutil::PIX_FMT_YUV420P`.
-    pub fn new_with_params(path:         Path,
-                           width:        usize,
-                           height:       usize,
-                           bit_rate:     Option<usize>,
-                           time_base:    Option<(usize, usize)>,
-                           gop_size:     Option<usize>,
-                           max_b_frames: Option<usize>,
-                           pix_fmt:      Option<i32>)
-                           -> Recorder {
+    pub fn new_with_params<P: ?Sized + AsRef<OsStr>>(path:         &P,
+                                                     width:        usize,
+                                                     height:       usize,
+                                                     bit_rate:     Option<usize>,
+                                                     time_base:    Option<(usize, usize)>,
+                                                     gop_size:     Option<usize>,
+                                                     max_b_frames: Option<usize>,
+                                                     pix_fmt:      Option<i32>)
+                                                     -> Recorder {
         unsafe {
             avformat_init.call_once(|| {
                 avformat::av_register_all();
@@ -127,7 +126,7 @@ impl Recorder {
             scale_context:    ptr::null_mut(),
             format_context:   ptr::null_mut(),
             video_st:         ptr::null_mut(),
-            path:             path,
+            path:             PathBuf::from(path),
             frame_buf:        Vec::new(),
             tmp_frame_buf:    Vec::new()
         }
@@ -201,7 +200,7 @@ impl Recorder {
         unsafe {
             ret = avcodec::avcodec_encode_video2(self.context,
                                                  &mut pkt,
-                                                 self.frame as *const AVFrame,
+                                                 self.frame,
                                                  &mut got_output);
         }
 
@@ -226,7 +225,7 @@ impl Recorder {
             return;
         }
         
-        let path_str : std::ffi::CString = self.path.as_os_str().to_cstring().unwrap();
+        let path_str = self.path.as_os_str().to_cstring().unwrap();
 
         unsafe {
             // try to guess the container type from the path.
@@ -237,7 +236,7 @@ impl Recorder {
 
             if self.format_context.is_null() {
                 // could not guess, default to MPEG
-                let mpeg = std::ffi::CString::new(&b"mpeg"[..]).unwrap();
+                let mpeg = CString::new(&b"mpeg"[..]).unwrap();
                 
                 let _ = avformat::avformat_alloc_output_context2(&mut fmt, ptr::null_mut(), mpeg.as_ptr(), path_str.as_ptr());
             }
@@ -254,7 +253,7 @@ impl Recorder {
                 panic!("The selected output container does not support video encoding.")
             }
 
-            let mut codec: *mut AVCodec;
+            let codec: *mut AVCodec;
 
             let ret: i32 = 0;
 
@@ -264,7 +263,7 @@ impl Recorder {
                 panic!("Codec not found.");
             }
 
-            self.video_st = avformat::avformat_new_stream(self.format_context, codec as *const AVCodec);
+            self.video_st = avformat::avformat_new_stream(self.format_context, codec);
 
             if self.video_st.is_null() {
                 panic!("Failed to allocate the video stream.");
@@ -274,7 +273,7 @@ impl Recorder {
 
             self.context = (*self.video_st).codec;
 
-            let _ = avcodec::avcodec_get_context_defaults3(self.context, codec as *const AVCodec);
+            let _ = avcodec::avcodec_get_context_defaults3(self.context, codec);
 
             if self.context.is_null() {
                 panic!("Could not allocate video codec context.");
@@ -314,7 +313,7 @@ impl Recorder {
             */
 
             // Open the codec.
-            if avcodec::avcodec_open2(self.context, codec as *const AVCodec, ptr::null_mut()) < 0 {
+            if avcodec::avcodec_open2(self.context, codec, ptr::null_mut()) < 0 {
                 panic!("Could not open the codec.");
             }
 
@@ -360,7 +359,7 @@ impl Recorder {
             // the rest (width, height, data, linesize) are set at the moment of the snapshot.
 
             // Open the output file.
-            let path_str : std::ffi::CString = self.path.as_os_str().to_cstring().unwrap();
+            let path_str = self.path.as_os_str().to_cstring().unwrap();
             
             static AVIO_FLAG_WRITE: i32 = 2; // XXX: this should be defined by the bindings.
             if avformat::avio_open(&mut (*self.format_context).pb, path_str.as_ptr(), AVIO_FLAG_WRITE) < 0 {
@@ -417,8 +416,8 @@ impl Drop for Recorder {
                 let _ = avcodec::avcodec_close(self.context);
                 avutil::av_free(self.context as *mut c_void);
                 // avutil::av_freep((*self.frame).data[0] as *mut c_void);
-                avcodec::avcodec_free_frame(&mut self.frame as *mut *mut AVFrame);
-                avcodec::avcodec_free_frame(&mut self.tmp_frame as *mut *mut AVFrame);
+                avcodec::avcodec_free_frame(&mut self.frame);
+                avcodec::avcodec_free_frame(&mut self.tmp_frame);
             }
         }
     }
