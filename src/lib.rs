@@ -186,7 +186,7 @@ impl Recorder {
                 );
 
             let _ = swscale::sws_scale(self.scale_context,
-                                       (*self.tmp_frame).data[0] as *const *const u8, &(*self.tmp_frame).linesize[0],
+                                       mem::transmute(&(*self.tmp_frame).data[0]), &(*self.tmp_frame).linesize[0],
                                        0, win_height,
                                        mem::transmute(&(*self.frame).data[0]), &(*self.frame).linesize[0]);
         }
@@ -295,6 +295,7 @@ impl Recorder {
             // frames per second.
             let (tnum, tdenum)           = self.time_base;
             (*self.context).time_base    = Struct_AVRational { num: tnum as i32, den: tdenum as i32 };
+            (*self.video_st).time_base   = (*self.context).time_base;
             (*self.context).gop_size     = self.gop_size as i32;
             (*self.context).max_b_frames = self.max_b_frames as i32;
             (*self.context).pix_fmt      = self.pix_fmt;
