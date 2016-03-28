@@ -7,7 +7,7 @@
 #![deny(unused_parens)]
 #![deny(non_upper_case_globals)]
 #![deny(unused_qualifications)]
-#![warn(missing_docs)] // FIXME: should be denied.
+#![deny(missing_docs)]
 #![deny(unused_results)]
 #![deny(unused_variables)]
 #![warn(trivial_casts)]
@@ -441,8 +441,8 @@ impl Drop for Recorder {
 }
 
 fn vflip(vec: &mut [u8], width: usize, height: usize) {
-    for j in (0..height / 2) {
-        for i in (0..width) {
+    for j in 0..height / 2 {
+        for i in 0..width {
             vec.swap((height - j - 1) * width + i, j * width + i);
         }
     }
