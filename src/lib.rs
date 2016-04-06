@@ -3,12 +3,11 @@
  */
 
 #![crate_type = "lib"]
-#![feature(convert)]
 #![deny(non_camel_case_types)]
 #![deny(unused_parens)]
 #![deny(non_upper_case_globals)]
 #![deny(unused_qualifications)]
-#![warn(missing_docs)] // FIXME: should be denied.
+#![deny(missing_docs)]
 #![deny(unused_results)]
 #![deny(unused_variables)]
 #![warn(trivial_casts)]
@@ -33,6 +32,8 @@ use std::ptr;
 use std::mem;
 use std::path::PathBuf;
 use std::ffi::{CString,OsStr};
+#[cfg(not(windows))]
+use std::os::unix::ffi::OsStrExt;
 use std::iter::FromIterator;
 use std::sync::{Once, ONCE_INIT};
 use kiss3d::window::Window;
@@ -61,6 +62,21 @@ pub struct Recorder {
     video_st:         *mut AVStream,
     scale_context:    *mut Struct_SwsContext,
     path:             PathBuf
+}
+
+// TODO: this can be replaced with OsStr::to_cstring once feature(convert) lands
+fn os_to_cstring(ostr : &OsStr) -> Option<CString> {
+    // taken from std::ffi::OsStr::to_bytes
+    let bytes = if cfg!(windows) {
+        ostr.to_str().map(|s| s.as_bytes())
+    } else {
+        // uses os::unix::ffi::OsStrExt
+        Some(ostr.as_bytes())
+    };
+    
+    // taken directly from std::ffi::OsStr::to_cstring
+    bytes.and_then(|b| CString::new(b).ok())
+
 }
 
 impl Recorder {
@@ -156,7 +172,7 @@ impl Recorder {
         let win_width  = window.width() as i32;
         let win_height = window.height() as i32;
 
-        vflip(self.tmp_frame_buf.as_mut_slice(), win_width as usize * 3, win_height as usize);
+        vflip(&mut *self.tmp_frame_buf, win_width as usize * 3, win_height as usize);
 
         unsafe {
             (*self.frame).pts += avutil::av_rescale_q(1, (*self.context).time_base, (*self.video_st).time_base);
@@ -225,7 +241,7 @@ impl Recorder {
             return;
         }
         
-        let path_str = self.path.as_os_str().to_cstring().unwrap();
+        let path_str = os_to_cstring(self.path.as_os_str()).unwrap();
 
         unsafe {
             // try to guess the container type from the path.
@@ -360,7 +376,7 @@ impl Recorder {
             // the rest (width, height, data, linesize) are set at the moment of the snapshot.
 
             // Open the output file.
-            let path_str = self.path.as_os_str().to_cstring().unwrap();
+            let path_str = os_to_cstring(self.path.as_os_str()).unwrap();
             
             static AVIO_FLAG_WRITE: i32 = 2; // XXX: this should be defined by the bindings.
             if avformat::avio_open(&mut (*self.format_context).pb, path_str.as_ptr(), AVIO_FLAG_WRITE) < 0 {
@@ -425,8 +441,8 @@ impl Drop for Recorder {
 }
 
 fn vflip(vec: &mut [u8], width: usize, height: usize) {
-    for j in (0..height / 2) {
-        for i in (0..width) {
+    for j in 0..height / 2 {
+        for i in 0..width {
             vec.swap((height - j - 1) * width + i, j * width + i);
         }
     }
